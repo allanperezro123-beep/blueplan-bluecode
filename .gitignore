@@ -1,0 +1,25 @@
+# Secrets & local credentials (ISO/IEC 27001)
+*.key
+*.pem
+.env
+.env.*
+
+# Firebase cache & logs
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# Dependencies
+node_modules/
+functions/node_modules/
+
+# Local IDE / Agent state
+.claude/settings.local.json
+.atl/
+.vscode/
+
+# OS & temporary files
+*.log
+.DS_Store
+Thumbs.db

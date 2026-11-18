@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Editor público: shareable-link model, sin auth — la seguridad es el
+// código de sala impredecible en la URL, no un login. `get`/`create`/
+// `update` quedan EXACTAMENTE como antes (allow read, write: if true),
+// así que ningún usuario normal nota el cambio.
+//
+// Lo nuevo es el panel de administración (sitio de Hosting aparte,
+// plano-instalacion-admin): necesita LISTAR la colección entera para
+// mostrar "qué salas hay", algo que el editor normal nunca hizo ni
+// necesita (siempre entra por un `get` puntual con el código que ya
+// tiene). `list` es una operación de lectura DISTINTA de `get` en las
+// reglas de Firestore — se puede permitir una sin la otra — así que se
+// cierra ahí, y `delete` (que el editor tampoco expone) queda con el
+// mismo candado.
+//
+// UID de la cuenta administrativa de BlueCode (configurar en Firebase Console -> Authentication -> Users).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function esAdmin(){
+      return request.auth != null && request.auth.token.admin == true;
+    }
+    match /planos/{planId} {
+      allow get, create, update: if true;
+      allow list, delete: if esAdmin();
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "blueplan-bluecode"
+  },
+  "targets": {
+    "blueplan-bluecode": {
+      "hosting": {
+        "main": [
+          "blueplan-bluecode"
+        ],
+        "admin": [
+          "blueplan-bluecode-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
