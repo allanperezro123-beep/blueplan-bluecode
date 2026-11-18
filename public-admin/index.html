@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Panel de Administración — BluePlan | BlueCode</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><rect width=%2224%22 height=%2224%22 rx=%225%22 fill=%22%230865F5%22/><path d=%22M6 12h12M12 6v12%22 stroke=%22white%22 stroke-width=%222.4%22 stroke-linecap=%22round%22/></svg>">
+<style>
+/* ==========================================================================
+   PANEL DE ADMINISTRACIÓN — BluePlan (BlueCode)
+   Sitio de Hosting APARTE del editor (target "admin" en firebase.json), con
+   su propia URL (.web.app), pensado como el "subdominio" que pidió el
+   usuario: solo esta página puede LISTAR todas las salas de Firestore — el
+   editor público nunca lo hizo ni lo necesita (siempre entra por su código
+   de sala, un `get` puntual, no un `list` de la colección entera).
+
+   La seguridad real vive en firestore.rules (allow list/delete: if es
+   admin), NO acá: esta página ni siquiera conoce el UID del administrador.
+   Si alguien sin permiso llega a loguearse (no debería poder: solo existe
+   la cuenta que se creó a mano en la consola de Firebase), Firestore le
+   niega el `list` y esta página lo muestra como error, punto — no hay nada
+   que "hackear" del lado del cliente para entrar.
+
+   Mismo esquema de color que el editor (--ink/--muted/--accent, etc.) para
+   que se sienta parte de la misma familia, sin compartir una sola línea de
+   código con él: son dos despliegues de Hosting independientes.
+
+   REDISEÑO VISUAL (esta revisión): layout tipo "plataforma de cursos" —
+   barra superior + sidebar oscuros fijos ("chrome" de marca, con sus
+   propios tokens --chrome-*, que NO cambian con el tema claro/oscuro) y
+   área principal con hero + stats + grid que sí sigue los tokens de tema
+   normales (--ink/--bg/--panel/...). Se agregó un toggle manual de tema
+   (persistido en localStorage) que convive con el prefers-color-scheme
+   automático de siempre: sin preferencia guardada, sigue mandando el
+   sistema operativo tal cual mandaba antes.
+   ========================================================================== */
+:root{
+  --ink:#0e1934; --muted:#64748b; --line:#cbd5e1; --panel:#ffffff;
+  --bg:#f1f5f9; --accent:#1d4ed8; --accent-soft:#dbeafe;
+  --danger:#dc2626; --danger-soft:#fee2e2;
+  --ok:#16a34a; --ok-soft:#dcfce7;
+  --shadow:0 1px 2px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.08);
+
+  /* "chrome" — topbar + sidebar quedan oscuros SIEMPRE, sea cual sea el
+     tema activo del contenido (igual que la referencia: la barra y el
+     panel lateral no cambian, lo que cambia es el área principal). */
+  --chrome-bg:#0b1120; --chrome-panel:#111b34; --chrome-ink:#e8edfb;
+  --chrome-muted:#8fa0c4; --chrome-line:#1e2942; --chrome-active:#17223d;
+  --chrome-accent:#5b8bff;
+  --topbar-h:48px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e6ecfb; --muted:#93a3c2; --line:#2a3554; --panel:#131b31;
+    --bg:#0b1120; --accent:#5b8bff; --accent-soft:#1c2b52;
+    --danger:#f87171; --danger-soft:#3a1a1e;
+    --ok:#4ade80; --ok-soft:#12301e;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+}
+/* Toggle manual: si hay preferencia guardada, gana siempre sobre el
+   sistema operativo (en las dos direcciones). Sin preferencia guardada,
+   el bloque de arriba (prefers-color-scheme) sigue decidiendo solo. */
+:root[data-theme="dark"]{
+  --ink:#e6ecfb; --muted:#93a3c2; --line:#2a3554; --panel:#131b31;
+  --bg:#0b1120; --accent:#5b8bff; --accent-soft:#1c2b52;
+  --danger:#f87171; --danger-soft:#3a1a1e;
+  --ok:#4ade80; --ok-soft:#12301e;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:14px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  min-height:100vh;
+}
+button{font:inherit}
+input,select{font:inherit;color:inherit}
+
+/* -------------------------------------------------- pantalla de login -- */
+#loginScreen{
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+  padding:20px;
+}
+.login-card{
+  width:100%; max-width:340px; background:var(--panel); border:1px solid var(--line);
+  border-radius:14px; padding:28px 26px; box-shadow:var(--shadow);
+}
+.login-brand{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.login-brand .dot{
+  width:34px; height:34px; border-radius:9px; background:var(--accent);
+  display:grid; place-items:center; flex:none;
+}
+.login-brand .dot svg{ width:19px; height:19px; stroke:#fff; stroke-width:2.4; fill:none; stroke-linecap:round; }
+.login-brand b{ font-size:15px }
+.login-brand span{ display:block; font-size:11px; color:var(--muted) }
+.login-card h1{ font-size:13px; font-weight:700; margin:22px 0 14px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px }
+.field{ margin-bottom:12px }
+.field label{ display:block; font-size:12px; font-weight:600; margin-bottom:5px; color:var(--muted) }
+.field input{
+  width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+  background:var(--bg); color:var(--ink); outline:none;
+}
+.field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft) }
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  padding:10px 16px; border-radius:8px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); cursor:pointer; font-weight:600; font-size:13px;
+  transition:background .12s,border-color .12s,transform .08s;
+}
+.btn:hover{ background:var(--bg) }
+.btn:active{ transform:scale(.97) }
+.btn-primary{ background:var(--accent); border-color:var(--accent); color:#fff; width:100% }
+.btn-primary:hover{ background:#1743ab }
+.btn-primary:disabled{ opacity:.6; cursor:default }
+.btn-danger{ color:var(--danger); border-color:var(--danger) }
+.btn-danger:hover{ background:var(--danger-soft) }
+.btn-danger.solid{ background:var(--danger); color:#fff }
+.btn-danger.solid:hover{ background:#b91c1c }
+.login-error{
+  background:var(--danger-soft); color:var(--danger); border-radius:8px;
+  padding:9px 11px; font-size:12.5px; margin-bottom:12px; display:none;
+}
+.login-error.show{ display:block }
+.spinner{
+  width:15px; height:15px; border-radius:50%; border:2px solid rgba(255,255,255,.4);
+  border-top-color:#fff; animation:girar .7s linear infinite; flex:none;
+}
+@keyframes girar{ to{ transform:rotate(360deg) } }
+
+/* -------------------------------------------------------- dashboard -- */
+#dash{ display:none }
+#dash.show{ display:block }
+
+/* -- barra superior (chrome fijo, oscuro siempre) -- */
+.topbar{
+  height:var(--topbar-h); background:var(--chrome-bg); color:var(--chrome-ink);
+  border-bottom:1px solid var(--chrome-line); position:sticky; top:0; z-index:6;
+}
+.topbar-inner{
+  height:100%; max-width:1520px; margin:0 auto; padding:0 20px;
+  display:flex; align-items:center; gap:14px;
+}
+.topbar-inner .spacer{ flex:1 }
+.topbar-brand{ font-size:12px; color:var(--chrome-muted); font-weight:600; letter-spacing:.2px }
+.topbar-brand b{ color:var(--chrome-ink) }
+.topbar .live-dot{ box-shadow:0 0 0 3px rgba(91,139,255,.25) }
+.topbar .live-label{ color:var(--chrome-muted) }
+
+/* -- layout de dos columnas: sidebar + main -- */
+.app-shell{ display:flex; align-items:flex-start; }
+.sidebar{
+  width:262px; flex:none; background:var(--chrome-bg); color:var(--chrome-ink);
+  border-right:1px solid var(--chrome-line);
+  padding:22px 18px 26px; display:flex; flex-direction:column; gap:22px;
+  position:sticky; top:var(--topbar-h); height:calc(100vh - var(--topbar-h));
+  overflow-y:auto;
+}
+.sidebar-brand{ display:flex; align-items:center; gap:10px; }
+.sidebar-brand .dot{
+  width:34px; height:34px; border-radius:9px; background:var(--chrome-accent);
+  display:grid; place-items:center; flex:none;
+}
+.sidebar-brand .dot svg{ width:19px; height:19px; stroke:#fff; stroke-width:2.4; fill:none; stroke-linecap:round; }
+.sidebar-brand b{ font-size:14px; display:block }
+.sidebar-brand span{ display:block; font-size:11px; color:var(--chrome-muted) }
+
+.theme-toggle{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  width:100%; padding:9px 12px; border-radius:9px; border:1px solid var(--chrome-line);
+  background:var(--chrome-panel); color:var(--chrome-ink); cursor:pointer;
+  font-size:12.5px; font-weight:600;
+}
+.theme-toggle:hover{ background:var(--chrome-active) }
+.theme-toggle svg{ width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round }
+
+.session-card{
+  background:var(--chrome-panel); border:1px solid var(--chrome-line); border-radius:10px;
+  padding:12px; display:flex; flex-direction:column; gap:9px;
+}
+.session-card .who-name{ font-size:12.5px; font-weight:700; word-break:break-all; color:var(--chrome-ink) }
+.session-card .who-role{ font-size:10.5px; color:var(--chrome-muted); text-transform:uppercase; letter-spacing:.4px; margin-top:1px }
+.session-card .btn{ width:100%; background:var(--chrome-bg); border-color:var(--chrome-line); color:var(--chrome-ink) }
+.session-card .btn:hover{ background:var(--chrome-active) }
+
+.side-nav ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.side-nav li{
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px;
+  font-size:12.5px; color:var(--chrome-muted); cursor:pointer; font-weight:600;
+}
+.side-nav li:hover{ background:var(--chrome-active); color:var(--chrome-ink) }
+.side-nav li.active{ background:var(--chrome-active); color:var(--chrome-ink) }
+.side-nav li.active svg{ stroke:var(--chrome-accent) }
+.side-nav svg{ width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.8; flex:none }
+.side-nav .nav-label{ flex:1 }
+.nav-badge{
+  background:var(--chrome-line); color:var(--chrome-ink); border-radius:20px;
+  font-size:10.5px; font-weight:700; padding:1px 7px; min-width:16px; text-align:center;
+}
+.side-nav li.active .nav-badge{ background:var(--chrome-accent); color:#0b1120 }
+.sidebar-hint{ font-size:11px; color:var(--chrome-muted); line-height:1.5; margin-top:auto; padding-top:6px; border-top:1px solid var(--chrome-line) }
+
+/* -- área principal -- */
+.main{ flex:1; min-width:0; }
+
+.hero{ position:relative; overflow:hidden; padding:46px 24px 40px; border-bottom:1px solid var(--line); }
+.hero-inner{ max-width:760px; margin:0 auto; position:relative; z-index:1; text-align:center; }
+
+.code-window{
+  margin:0 auto 24px; max-width:420px; text-align:left; background:var(--panel);
+  border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); overflow:hidden;
+}
+.code-window .cw-bar{ display:flex; align-items:center; gap:6px; padding:9px 12px; border-bottom:1px solid var(--line); }
+.code-window .cw-bar span{ width:9px; height:9px; border-radius:50%; }
+.code-window .cw-bar span:nth-child(1){ background:#f87171 }
+.code-window .cw-bar span:nth-child(2){ background:#fbbf24 }
+.code-window .cw-bar span:nth-child(3){ background:#34d399 }
+.code-window .cw-bar em{ font-style:normal; margin-left:4px; font-size:11px; color:var(--muted) }
+.code-window pre{
+  margin:0; padding:14px 16px; font-family:ui-monospace,Consolas,monospace; font-size:11.5px;
+  line-height:1.7; color:var(--ink); overflow-x:auto; white-space:pre;
+}
+.code-window .cw-key{ color:var(--accent) }
+.code-window .cw-str{ color:#16a34a }
+.code-window .cw-mut{ color:var(--muted) }
+
+.hero h1{ font-size:32px; font-weight:800; margin:0 0 4px; letter-spacing:-.5px }
+.hero .stats{ text-align:left; margin:20px 0 22px; }
+.hero .hero-desc{ font-size:13.5px; color:var(--muted); max-width:520px; margin:0 auto 22px; line-height:1.6 }
+.hero-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap }
+.hero-actions .btn{ padding:11px 20px; font-size:13px }
+.btn-hero-primary{ background:var(--ink); border-color:var(--ink); color:var(--bg); font-weight:700 }
+.btn-hero-primary:hover{ opacity:.86; background:var(--ink) }
+.btn-outline{ background:transparent; border:1.5px solid var(--ink); color:var(--ink); font-weight:700 }
+.btn-outline:hover{ background:var(--ink); color:var(--bg) }
+.btn-pill{ border-radius:999px; font-weight:600 }
+
+.hero-bg-icons{ position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
+.hero-bg-icons svg{ position:absolute; stroke:var(--ink); fill:none; stroke-width:1.2; opacity:.07 }
+
+.wrap{ max-width:1180px; margin:0 auto; padding:20px; }
+
+.stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+.stat{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+.stat b{ display:block; font-size:24px; line-height:1.1 }
+.stat span{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px }
+
+.toolbar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+.toolbar input[type=search]{
+  flex:1; min-width:200px; padding:9px 12px; border:1px solid var(--line);
+  border-radius:8px; background:var(--panel); color:var(--ink); outline:none;
+}
+.toolbar input[type=search]:focus{ border-color:var(--accent) }
+.toolbar select{
+  padding:9px 10px; border:1px solid var(--line); border-radius:8px;
+  background:var(--panel); color:var(--ink);
+}
+.live-dot{
+  width:7px; height:7px; border-radius:50%; background:var(--ok); flex:none;
+  box-shadow:0 0 0 3px var(--ok-soft); animation:latir 1.6s ease-in-out infinite;
+}
+@keyframes latir{ 0%,100%{ opacity:1 } 50%{ opacity:.45 } }
+.live-label{ font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:6px; white-space:nowrap }
+
+.grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+.card{
+  background:var(--panel); border:1px solid var(--line); border-radius:14px;
+  overflow:hidden; display:flex; flex-direction:column; box-shadow:var(--shadow);
+}
+.card-presence{
+  display:flex; align-items:center; gap:6px; padding:6px 14px; font-size:11px; font-weight:700;
+  color:var(--ok); background:var(--ok-soft); border-bottom:1px solid var(--line);
+}
+.card-presence .dot-live{
+  width:7px; height:7px; border-radius:50%; background:var(--ok); flex:none;
+  box-shadow:0 0 0 3px var(--ok-soft); animation:latir 1.6s ease-in-out infinite;
+}
+.card-head{ padding:13px 14px 10px; }
+.card-code{
+  font-family:ui-monospace,Consolas,monospace; font-size:19px; font-weight:800;
+  letter-spacing:1px; color:var(--accent);
+}
+.card-sede{ font-size:13.5px; font-weight:700; margin-top:2px }
+.card-lugar{ font-size:12px; color:var(--muted); margin-top:1px }
+.card-meta{
+  display:flex; gap:10px; flex-wrap:wrap; font-size:11.5px; color:var(--muted);
+  padding:0 14px 10px; border-bottom:1px solid var(--line);
+}
+.card-meta b{ color:var(--ink) }
+
+/* La proporción es la del LIENZO (2200×1000), no la de la hoja A4: el iframe
+   en modo miniatura muestra el lienzo y nada más, así que con 297/210 quedaba
+   una franja muerta abajo en todas las tarjetas. */
+.preview-wrap{
+  aspect-ratio:2200/1000; background:repeating-linear-gradient(45deg,var(--bg),var(--bg) 10px,var(--panel) 10px,var(--panel) 20px);
+  position:relative; overflow:hidden; border-bottom:1px solid var(--line);
+}
+.preview-wrap iframe{
+  position:absolute; top:0; left:0; border:none;
+  width:2200px; height:1000px;   /* mismo lienzo CW×CH del editor */
+  transform-origin:0 0;
+  pointer-events:none;           /* es una vista previa, no un editor embebido */
+}
+.preview-btn{
+  position:absolute; inset:0; display:grid; place-items:center; cursor:pointer;
+  background:rgba(15,23,42,.03); border:none; color:var(--muted); font-size:12.5px; font-weight:600;
+  gap:6px;
+}
+.preview-btn:hover{ background:rgba(15,23,42,.06) }
+.preview-btn svg{ width:22px; height:22px; stroke:currentColor; stroke-width:1.8; fill:none }
+
+.card-actions{ display:flex; flex-wrap:wrap; gap:7px; padding:11px 14px 13px; }
+.card-actions .btn{ padding:7px 10px; font-size:12px; flex:1; min-width:0 }
+
+/* ------------------------------------------------ selección en lote -- */
+.card-pick{
+  position:absolute; top:10px; right:10px; z-index:2;
+  width:22px; height:22px; cursor:pointer; accent-color:var(--accent);
+}
+.card{ position:relative }
+.card.marcada{ outline:2px solid var(--accent); outline-offset:-2px }
+/* Barra flotante: aparece sola al marcar la primera sala y se va sola al
+   desmarcar la última, así no ocupa lugar cuando no hace falta. */
+.barra-lote{
+  position:fixed; left:50%; bottom:20px; transform:translateX(-50%) translateY(120%);
+  background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  box-shadow:var(--shadow); padding:10px 14px; z-index:40;
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  transition:transform .18s ease-out;
+}
+.barra-lote.show{ transform:translateX(-50%) translateY(0) }
+.barra-lote b{ font-size:13px }
+.barra-lote .btn{ padding:7px 12px; font-size:12.5px }
+
+/* -- vista de lista (toggle del botón pill del hero) -- */
+.grid.vista-lista{ grid-template-columns:1fr; gap:10px; }
+.grid.vista-lista .card{ flex-direction:row; flex-wrap:wrap; align-items:stretch; }
+.grid.vista-lista .card-presence{ width:100%; order:-2 }
+.grid.vista-lista .preview-wrap{
+  order:-1; width:200px; flex:none; aspect-ratio:auto;
+  border-bottom:none; border-right:1px solid var(--line);
+}
+.grid.vista-lista .card-head{ flex:1; min-width:220px; }
+.grid.vista-lista .card-meta{ flex:1; min-width:220px; border-bottom:none; align-items:center; align-self:center }
+.grid.vista-lista .card-actions{ width:100%; border-top:1px solid var(--line) }
+
+.empty{
+  text-align:center; padding:60px 20px; color:var(--muted);
+}
+.empty svg{ width:40px; height:40px; stroke:var(--muted); stroke-width:1.5; fill:none; margin-bottom:10px }
+
+/* ------------------------------------------------------------ modal -- */
+.modal-back{
+  position:fixed; inset:0; background:rgba(10,15,30,.5); display:none;
+  align-items:center; justify-content:center; z-index:50; padding:16px;
+}
+.modal-back.show{ display:flex }
+.modal{
+  background:var(--panel); border-radius:14px; width:100%; max-width:400px;
+  padding:22px; box-shadow:var(--shadow); max-height:90vh; overflow:auto;
+}
+.modal h2{ font-size:16px; margin:0 0 4px }
+.modal p.sub{ font-size:12.5px; color:var(--muted); margin:0 0 16px }
+.modal-actions{ display:flex; gap:8px; margin-top:18px; justify-content:flex-end }
+.confirm-code{
+  font-family:ui-monospace,Consolas,monospace; font-weight:800; color:var(--danger);
+  letter-spacing:1px;
+}
+
+.toast{
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px);
+  background:var(--ink); color:#fff; padding:10px 18px; border-radius:10px;
+  font-size:13px; opacity:0; pointer-events:none; transition:opacity .18s,transform .18s;
+  z-index:80; box-shadow:var(--shadow);
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0) }
+
+/* -------------------------------------------------------------- footer -- */
+.site-footer{
+  max-width:1180px; margin:8px auto 40px; padding:20px 20px 0; border-top:1px solid var(--line);
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+}
+.footer-attrib{ font-size:11.5px; color:var(--muted) }
+.avatar-row{ display:flex; align-items:center; }
+.avatar-row .av{
+  width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff;
+  font-size:10.5px; font-weight:700; display:grid; place-items:center;
+  border:2px solid var(--bg); margin-left:-8px;
+}
+.avatar-row .av:first-child{ margin-left:0 }
+.avatar-row .av-empty{ font-size:11.5px; color:var(--muted); font-weight:500; background:none; border:none; width:auto; margin:0 }
+
+/* -------------------------------------------------------- responsive -- */
+@media (max-width:880px){
+  .app-shell{ flex-direction:column }
+  .sidebar{
+    position:static; width:100%; height:auto; overflow:visible;
+    flex-direction:row; flex-wrap:wrap; align-items:center; gap:14px; padding:14px 16px;
+    border-right:none; border-bottom:1px solid var(--chrome-line);
+  }
+  .sidebar-brand{ flex:none }
+  .theme-toggle{ width:auto; flex:none }
+  .session-card{ flex-direction:row; align-items:center; justify-content:space-between; flex:1; min-width:220px }
+  .session-card .btn{ width:auto }
+  .side-nav{ width:100%; order:5 }
+  .side-nav ul{ flex-direction:row; flex-wrap:wrap }
+  .sidebar-hint{ display:none }
+}
+@media (max-width:600px){
+  .hero{ padding:30px 16px 26px }
+  .hero h1{ font-size:24px }
+  .hero-bg-icons{ display:none }
+  .code-window{ display:none }
+}
+</style>
+</head>
+<body>
+<script>
+/* Se aplica ANTES del primer paint (script síncrono en <head>, corre antes
+   que el módulo de abajo, que además espera los imports de Firebase por
+   red): evita el flash del tema equivocado si ya había una preferencia
+   guardada. Sin preferencia guardada no toca nada — sigue mandando
+   prefers-color-scheme como siempre mandó. */
+(function(){
+  try{
+    var t = localStorage.getItem('plano_admin_theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  }catch(e){}
+})();
+</script>
+
+<!-- ============================================================ LOGIN -->
+<div id="loginScreen">
+  <form class="login-card" id="loginForm">
+    <div class="login-brand">
+      <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 2 3 7v6c0 5 4 8.5 9 9 5-.5 9-4 9-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <div><b>Panel de Administración</b><span>Plano Instalación</span></div>
+    </div>
+    <h1>Iniciar sesión</h1>
+    <div class="login-error" id="loginError"></div>
+    <div class="field"><label for="loginEmail">Correo</label>
+      <input id="loginEmail" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="loginPass">Contraseña</label>
+      <input id="loginPass" type="password" autocomplete="current-password" required></div>
+    <button class="btn btn-primary" type="submit" id="loginBtn">Entrar</button>
+  </form>
+</div>
+
+<!-- ========================================================= DASHBOARD -->
+<div id="dash">
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="topbar-brand"><b>Plano Instalación</b> · panel interno</span>
+      <span class="spacer"></span>
+      <span class="live-label"><span class="live-dot"></span>En vivo</span>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 2 3 7v6c0 5 4 8.5 9 9 5-.5 9-4 9-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <div><b>Panel de Administración</b><span>Plano Instalación</span></div>
+      </div>
+
+      <button class="theme-toggle" id="btnTema" type="button">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="4.2"/></svg>
+          <span id="temaLabel">Tema claro</span>
+        </span>
+      </button>
+
+      <div class="session-card">
+        <div>
+          <div class="who-name" id="whoEmail"></div>
+          <div class="who-role">Administrador</div>
+        </div>
+        <button class="btn" id="btnLogout">Cerrar sesión</button>
+      </div>
+
+      <nav class="side-nav">
+        <ul id="navFiltros">
+          <li data-filtro="todas" class="active">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            <span class="nav-label">Todas las salas</span>
+            <span class="nav-badge" id="navCountTodas">—</span>
+          </li>
+          <li data-filtro="activas">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg>
+            <span class="nav-label">Activas ahora</span>
+            <span class="nav-badge" id="navCountActivas">—</span>
+          </li>
+          <li data-filtro="sinsede">
+            <svg viewBox="0 0 24 24"><path d="M3 11V4a1 1 0 0 1 1-1h7l9 9-8 8-9-9z"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
+            <span class="nav-label">Sin nombre de sede</span>
+            <span class="nav-badge" id="navCountSinsede">—</span>
+          </li>
+          <li data-filtro="hoy">
+            <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="16" y1="3" x2="16" y2="7"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span class="nav-label">Editadas hoy</span>
+            <span class="nav-badge" id="navCountHoy">—</span>
+          </li>
+        </ul>
+      </nav>
+
+      <p class="sidebar-hint">Los filtros se aplican junto con la búsqueda y el orden del panel principal.</p>
+    </aside>
+
+    <main class="main">
+      <section class="hero">
+        <div class="hero-bg-icons" aria-hidden="true">
+          <svg viewBox="0 0 24 24" style="top:6%;left:3%;width:72px;height:72px"><path d="M4 4v4a4 4 0 0 0 4 4h0a4 4 0 0 1 4 4v4"/><circle cx="4" cy="4" r="1.6"/><circle cx="20" cy="20" r="1.6"/></svg>
+          <svg viewBox="0 0 24 24" style="top:60%;left:6%;width:56px;height:56px"><rect x="4" y="3" width="16" height="18" rx="1.5"/><line x1="7" y1="7" x2="17" y2="7"/><line x1="7" y1="11" x2="17" y2="11"/><line x1="7" y1="15" x2="17" y2="15"/></svg>
+          <svg viewBox="0 0 24 24" style="top:10%;right:5%;width:64px;height:64px"><path d="M4 9a12 12 0 0 1 16 0"/><path d="M7 13a7 7 0 0 1 10 0"/><circle cx="12" cy="18" r="1.6"/></svg>
+          <svg viewBox="0 0 24 24" style="bottom:8%;right:9%;width:58px;height:58px"><rect x="4" y="4" width="16" height="16" rx="8"/><line x1="9" y1="9" x2="9" y2="13"/><line x1="15" y1="9" x2="15" y2="13"/></svg>
+          <svg viewBox="0 0 24 24" style="bottom:14%;left:44%;width:48px;height:48px"><rect x="3" y="9" width="18" height="6" rx="1"/><line x1="6" y1="9" x2="6" y2="12"/><line x1="9" y1="9" x2="9" y2="12"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="15" y1="9" x2="15" y2="12"/><line x1="18" y1="9" x2="18" y2="12"/></svg>
+        </div>
+
+        <div class="hero-inner">
+          <div class="code-window">
+            <div class="cw-bar"><span></span><span></span><span></span><em>sala.json</em></div>
+            <pre>{
+  <span class="cw-key">"id"</span>: <span class="cw-str">"COD1928"</span>,
+  <span class="cw-key">"header"</span>: {
+    <span class="cw-key">"sede"</span>: <span class="cw-str">"I.E. La Esperanza"</span>,
+    <span class="cw-key">"municipio"</span>: <span class="cw-str">"…"</span>
+  },
+  <span class="cw-key">"els"</span>: [ <span class="cw-mut">42 elementos</span> ],
+  <span class="cw-key">"activos"</span>: { <span class="cw-mut">2 conectados</span> }
+}</pre>
+          </div>
+
+          <h1>Panel de Administración</h1>
+
+          <div class="stats">
+            <div class="stat"><b id="statSalas">—</b><span>Salas totales</span></div>
+            <div class="stat"><b id="statElementos">—</b><span>Elementos en total</span></div>
+            <div class="stat"><b id="stat24h">—</b><span>Activas últimas 24 h</span></div>
+            <div class="stat"><b id="statVacias">—</b><span>Sin nombre de sede</span></div>
+            <div class="stat"><b id="statActivas">—</b><span>Conectadas ahora</span></div>
+          </div>
+
+          <p class="hero-desc">Vista en vivo de todas las salas registradas en Firestore: buscá, filtrá, previsualizá y administrá cada plano de instalación sin salir de esta pantalla.</p>
+
+          <div class="hero-actions">
+            <button class="btn btn-hero-primary" id="btnExportarTodo" title="Descarga un respaldo de TODAS las salas en un solo archivo">⭳ Exportar todo</button>
+            <button class="btn btn-outline" id="btnFocoBuscar" type="button">Buscar una sala</button>
+            <button class="btn btn-pill" id="btnVistaLista" type="button">Ver como lista</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="wrap">
+        <div class="toolbar">
+          <input type="search" id="buscar" placeholder="Buscar por código, sede, municipio o departamento…">
+          <select id="orden">
+            <option value="reciente">Más reciente primero</option>
+            <option value="antiguo">Más antiguo primero</option>
+            <option value="elementos">Más elementos primero</option>
+            <option value="codigo">Código (A–Z)</option>
+          </select>
+        </div>
+
+        <div id="listaVacia" class="empty" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>
+          <div>No hay salas activas todavía.</div>
+        </div>
+
+        <div class="grid" id="grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-attrib">Panel de Administración · BluePlan · <a href="https://bluecode-landing.pages.dev/" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;font-weight:700">BlueCode</a></div>
+    <div class="avatar-row" id="avatarRow"></div>
+  </footer>
+</div>
+
+<!-- ================================================== MODAL: editar -->
+<div class="modal-back" id="modalEditar">
+  <div class="modal">
+    <h2>Editar datos de la sala</h2>
+    <p class="sub">Sala <b id="editCodigo"></b> — cambios inmediatos, sin abrir el editor.</p>
+    <div class="field"><label>Departamento / Región</label><input id="editDepartamento"></div>
+    <div class="field"><label>Ciudad / Municipio</label><input id="editMunicipio"></div>
+    <div class="field"><label>Proyecto / Sede</label><input id="editSede"></div>
+    <div class="field"><label>Código de sitio</label><input id="editIdBenef"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelarEditar">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarEditar" style="width:auto">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================= MODAL: eliminar -->
+<div class="modal-back" id="modalEliminar">
+  <div class="modal">
+    <h2>Eliminar sala definitivamente</h2>
+    <p class="sub">Se descargó un respaldo automático al abrir esta ventana. Para confirmar, escribí el código
+      <span class="confirm-code" id="delCodigoLabel"></span> tal cual.</p>
+    <div class="field"><input id="delConfirmInput" placeholder="Código de la sala" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelarEliminar">Cancelar</button>
+      <button class="btn btn-danger solid" id="btnConfirmarEliminar" disabled>Eliminar definitivamente</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================== MODAL: eliminar en lote -->
+<div class="modal-back" id="modalEliminarLote">
+  <div class="modal">
+    <h2>Eliminar varias salas</h2>
+    <p class="sub">Se van a eliminar <b id="loteCantidad">0</b> salas definitivamente:
+      <span id="loteCodigos" class="confirm-code"></span>.<br>
+      Se descargó un respaldo con todas al abrir esta ventana. Para confirmar, escribí
+      <span class="confirm-code">ELIMINAR</span>.</p>
+    <div class="field"><input id="loteConfirmInput" placeholder="ELIMINAR" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelarLote">Cancelar</button>
+      <button class="btn btn-danger solid" id="btnConfirmarLote" disabled>Eliminar las seleccionadas</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ MODAL: restaurar respaldo -->
+<div class="modal-back" id="modalRestaurar">
+  <div class="modal">
+    <h2>Restaurar un respaldo</h2>
+    <p class="sub">Vas a REEMPLAZAR el contenido de la sala <b id="restCodigo"></b> por el del archivo
+      <b id="restArchivo"></b>.<br>
+      Se descargó un respaldo del estado actual al abrir esta ventana, así que esto se puede revertir.</p>
+    <div id="restResumen" class="sub"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelarRestaurar">Cancelar</button>
+      <button class="btn btn-primary" id="btnConfirmarRestaurar" style="width:auto">Restaurar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de acciones en lote: sale sola cuando hay salas marcadas -->
+<div class="barra-lote" id="barraLote">
+  <b id="loteResumen">0 seleccionadas</b>
+  <button class="btn" id="btnLoteExportar">⭳ Exportar respaldo</button>
+  <button class="btn btn-danger" id="btnLoteEliminar">Eliminar</button>
+  <button class="btn" id="btnLoteLimpiar">Quitar selección</button>
+</div>
+
+<input type="file" id="restaurarFile" accept="application/json,.json" hidden>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* ==========================================================================
+   Firebase: mismo SDK modular y misma config PÚBLICA que usa el editor (el
+   apiKey de una web app de Firebase no es un secreto — la seguridad real
+   está en las reglas de Firestore, no en ocultar esta config). Auth
+   habilitado únicamente con la cuenta creada a mano en la consola: esta
+   página no ofrece "crear cuenta", solo iniciar sesión.
+   ========================================================================== */
+const FIREBASE_CONFIG = window.BLUECODE_FIREBASE_CONFIG || {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+
+const [{ initializeApp }, authMod, fsMod] = await Promise.all([
+  import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+  import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'),
+  import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js')
+]);
+const { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } = authMod;
+const { getFirestore, collection, onSnapshot, doc, deleteDoc, setDoc, updateDoc, getDoc,
+        runTransaction, serverTimestamp } = fsMod;
+
+const app  = FIREBASE_CONFIG.projectId ? initializeApp(FIREBASE_CONFIG) : null;
+const auth = app ? getAuth(app) : null;
+const db   = app ? getFirestore(app) : null;
+
+const EDITOR_URL = '../public/index.html';
+const CW = 2200, CH = 1000; /* mismo lienzo del editor, para escalar la vista previa */
+
+const $ = id => document.getElementById(id);
+
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* --------------------------------------------------- tema claro/oscuro -- */
+/* El <script> del <head> ya aplicó data-theme ANTES del primer paint (evita
+   el flash del tema equivocado); acá solo hace falta el botón real y
+   mantener sincronizada la etiqueta. Sin preferencia guardada, se respeta
+   el prefers-color-scheme automático tal cual venía funcionando. */
+const THEME_KEY = 'plano_admin_theme';
+function temaEfectivo(){
+  return document.documentElement.getAttribute('data-theme')
+    || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+}
+function actualizarLabelTema(){
+  $('temaLabel').textContent = temaEfectivo() === 'dark' ? 'Tema oscuro' : 'Tema claro';
+}
+$('btnTema').addEventListener('click', () => {
+  const siguiente = temaEfectivo() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', siguiente);
+  try { localStorage.setItem(THEME_KEY, siguiente); } catch(e){}
+  actualizarLabelTema();
+});
+actualizarLabelTema();
+
+/* -------------------------------------------------------------- login -- */
+$('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = $('loginEmail').value.trim(), pass = $('loginPass').value;
+  const btn = $('loginBtn'), err = $('loginError');
+  err.classList.remove('show');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Verificando…';
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+    /* onAuthStateChanged se encarga de mostrar el dashboard */
+  } catch (ex){
+    /* Mensajes propios en vez de los códigos crudos de Firebase
+       (auth/invalid-credential, auth/too-many-requests, etc.) */
+    const msg = /invalid-credential|wrong-password|user-not-found/.test(ex.code)
+      ? 'Correo o contraseña incorrectos.'
+      : /too-many-requests/.test(ex.code)
+      ? 'Demasiados intentos — esperá un momento y volvé a intentar.'
+      : 'No se pudo iniciar sesión (' + (ex.code || ex.message) + ').';
+    err.textContent = msg;
+    err.classList.add('show');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+});
+$('btnLogout').onclick = () => signOut(auth);
+
+let unsubscribeSalas = null;
+let salas = [];   /* espejo local de la coleccion, para buscar/ordenar sin volver a pedirle nada a Firestore */
+
+onAuthStateChanged(auth, user => {
+  if (unsubscribeSalas){ unsubscribeSalas(); unsubscribeSalas = null; }
+  if (!user){
+    $('loginScreen').style.display = 'flex';
+    $('dash').classList.remove('show');
+    return;
+  }
+  $('loginScreen').style.display = 'none';
+  $('dash').classList.add('show');
+  $('whoEmail').textContent = user.email;
+  $('loginBtn').disabled = false; $('loginBtn').textContent = 'Entrar';
+  $('loginForm').reset();
+
+  /* Suscripción EN VIVO a la colección entera: es un `list`, así que solo
+     funciona si firestore.rules reconoce a este usuario como admin — si
+     no, Firestore devuelve permission-denied y se lo mostramos tal cual en
+     vez de dejar la pantalla en blanco sin explicación. */
+  unsubscribeSalas = onSnapshot(collection(db, 'planos'),
+    snap => {
+      salas = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      pintarTodo();
+    },
+    err => {
+      console.error('[admin] error listando salas', err);
+      $('grid').innerHTML = '';
+      $('listaVacia').style.display = 'block';
+      $('listaVacia').querySelector('div').textContent =
+        err.code === 'permission-denied'
+          ? 'Esta cuenta inició sesión pero no tiene permiso de administrador en Firestore (revisá el UID en firestore.rules).'
+          : 'No se pudo cargar la lista de salas (' + err.code + ').';
+    });
+});
+
+/* ------------------------------------------------------------ listado -- */
+const haceCuanto = ts => {
+  if (!ts) return 'sin fecha';
+  const ms = (ts.toMillis ? ts.toMillis() : ts) , d = Date.now() - ms;
+  const min = Math.floor(d/60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const hs = Math.floor(min/60);
+  if (hs < 24) return `hace ${hs} h`;
+  return `hace ${Math.floor(hs/24)} d`;
+};
+
+/* --------------------------------------------------- presencia (bonus) -- */
+/* Lee `activos` (mapa clientId -> {name, lastSeen}) que ya escribe el
+   editor público cada 20s mientras alguien tiene la sala abierta. Esto es
+   SOLO LECTURA acá — este panel nunca escribe en `activos`, ni en ningún
+   otro campo salvo los que ya tocaba el guardado del modal de editar.
+   Mismo umbral de 45000ms que usa el editor para considerar "conectado
+   ahora" (ver comentario del editor sobre el heartbeat). */
+const PRESENCIA_MS = 45000;
+function conectadosDe(sala){
+  const act = sala.activos || {};
+  const limite = Date.now() - PRESENCIA_MS;
+  return Object.values(act).filter(a => {
+    if (!a || !a.lastSeen) return false;
+    const ms = a.lastSeen.toMillis ? a.lastSeen.toMillis() : a.lastSeen;
+    return ms > limite;
+  });
+}
+function tieneConectados(sala){ return conectadosDe(sala).length > 0; }
+function esDeHoy(ts){
+  if (!ts) return false;
+  const ms = ts.toMillis ? ts.toMillis() : ts;
+  const d = new Date(ms), hoy = new Date();
+  return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
+}
+
+function pintarTodo(){
+  pintarStats();
+  pintarStatActivas();
+  pintarNav();
+  pintarGrid();
+  pintarAvatares();
+  pintarBarraLote();
+}
+function pintarStats(){
+  const total = salas.length;
+  const els = salas.reduce((t,s) => t + (Array.isArray(s.els) ? s.els.length : 0), 0);
+  const dia = Date.now() - 24*60*60*1000;
+  const activas = salas.filter(s => s.updatedAt && (s.updatedAt.toMillis ? s.updatedAt.toMillis() : s.updatedAt) > dia).length;
+  const sinSede = salas.filter(s => !s.header || !s.header.sede).length;
+  $('statSalas').textContent = total;
+  $('statElementos').textContent = els;
+  $('stat24h').textContent = activas;
+  $('statVacias').textContent = sinSede;
+}
+/* Stat nueva (bonus), separada a propósito de pintarStats() de arriba para
+   no tocar ni una coma de sus cálculos originales. */
+function pintarStatActivas(){
+  $('statActivas').textContent = salas.filter(tieneConectados).length;
+}
+
+/* --------------------------------------------- filtros de la sidebar -- */
+/* Filtro ADICIONAL por navegación lateral (pedido nuevo del usuario). Se
+   aplica en pintarGrid(), después de filtroYOrden() — filtroYOrden() en sí
+   queda intacta, tal cual estaba, con su búsqueda de texto y sus 4 modos
+   de orden. */
+const FILTROS_NAV = {
+  todas:   () => true,
+  activas: s => tieneConectados(s),
+  sinsede: s => !s.header || !s.header.sede,
+  hoy:     s => esDeHoy(s.updatedAt)
+};
+let filtroNavActivo = 'todas';
+function aplicarFiltroNav(s){ return (FILTROS_NAV[filtroNavActivo] || FILTROS_NAV.todas)(s); }
+
+function pintarNav(){
+  $('navCountTodas').textContent   = salas.length;
+  $('navCountActivas').textContent = salas.filter(tieneConectados).length;
+  $('navCountSinsede').textContent = salas.filter(s => !s.header || !s.header.sede).length;
+  $('navCountHoy').textContent     = salas.filter(s => esDeHoy(s.updatedAt)).length;
+  document.querySelectorAll('#navFiltros [data-filtro]').forEach(li => {
+    li.classList.toggle('active', li.dataset.filtro === filtroNavActivo);
+  });
+}
+$('navFiltros').addEventListener('click', e => {
+  const li = e.target.closest('[data-filtro]');
+  if (!li) return;
+  filtroNavActivo = li.dataset.filtro;
+  pintarNav();
+  pintarGrid();
+});
+
+function filtroYOrden(){
+  const q = $('buscar').value.trim().toLowerCase();
+  let lista = !q ? salas.slice() : salas.filter(s => {
+    const h = s.header || {};
+    return [s.id, h.sede, h.municipio, h.departamento, h.idbenef]
+      .some(v => String(v||'').toLowerCase().includes(q));
+  });
+  const orden = $('orden').value;
+  const upd = s => s.updatedAt ? (s.updatedAt.toMillis ? s.updatedAt.toMillis() : s.updatedAt) : 0;
+  if (orden === 'reciente')  lista.sort((a,b) => upd(b) - upd(a));
+  if (orden === 'antiguo')   lista.sort((a,b) => upd(a) - upd(b));
+  if (orden === 'elementos') lista.sort((a,b) => (b.els?.length||0) - (a.els?.length||0));
+  if (orden === 'codigo')    lista.sort((a,b) => a.id.localeCompare(b.id));
+  return lista;
+}
+
+/* Las vistas previas son <iframe> reales al editor público (mismo `?p=`
+   que ya usa cualquiera con el link) escalados con CSS — cero código de
+   render duplicado y encima quedan EN VIVO si alguien sigue editando esa
+   sala. Se cargan solo al pedirlas (clic en "Vista previa"): con muchas
+   salas, tener un iframe completo de la app abierto por card de entrada
+   sería carísimo en memoria y en conexiones de Firestore para nada. */
+function activarVistaPrevia(wrap, codigo){
+  const r = wrap.getBoundingClientRect();
+  const escala = Math.min(r.width / CW, r.height / CH);
+  /* `preview=1` es lo que hace que el editor cargue SOLO el lienzo: sin ese
+     parámetro el iframe traía la app entera (barra, paleta, membrete) y el
+     scale() de acá abajo dejaba el plano diminuto en una esquina — y encima
+     el modal "¿Cómo te llamás?" del editor, que salta en cualquier navegador
+     sin nombre guardado, tapaba la miniatura completa. Además, en ese modo el
+     editor no manda latido de presencia, así que mirar una miniatura ya no
+     cuenta como un colaborador conectado en esa sala. */
+  wrap.innerHTML = `<iframe src="${EDITOR_URL}?p=${encodeURIComponent(codigo)}&preview=1"
+    style="transform:scale(${escala})" title="Vista previa de ${esc(codigo)}"></iframe>`;
+}
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* --------------------------------------------------- selección en lote -- */
+/* Vive acá y no en las casillas del DOM porque el grid se repinta con cada
+   snapshot de Firestore (o sea, cada vez que cualquiera guarda algo en
+   cualquier sala): si el estado estuviera en el DOM, se te borraría la
+   selección sola mientras estás eligiendo. */
+const marcadas = new Set();
+
+function pintarBarraLote(){
+  /* Solo cuentan las que todavía existen: si alguien borra una sala desde
+     otra pestaña mientras estaba marcada, no tiene que seguir sumando. */
+  for (const id of [...marcadas]) if (!salas.some(s => s.id === id)) marcadas.delete(id);
+  const n = marcadas.size;
+  $('loteResumen').textContent = `${n} seleccionada${n === 1 ? '' : 's'}`;
+  $('barraLote').classList.toggle('show', n > 0);
+}
+const salasMarcadas = () => salas.filter(s => marcadas.has(s.id));
+
+function pintarGrid(){
+  let lista = filtroYOrden();
+  lista = lista.filter(aplicarFiltroNav);
+  $('listaVacia').style.display = lista.length ? 'none' : 'block';
+  if (!salas.length) $('listaVacia').querySelector('div').textContent = 'No hay salas activas todavía.';
+  else if (!lista.length) $('listaVacia').querySelector('div').textContent = 'Ninguna sala coincide con la búsqueda o el filtro.';
+
+  $('grid').innerHTML = lista.map(s => {
+    const h = s.header || {};
+    const n = Array.isArray(s.els) ? s.els.length : 0;
+    const conectados = conectadosDe(s);
+    const presencia = conectados.length
+      ? `<div class="card-presence"><span class="dot-live"></span>${conectados.length===1?'Conectado ahora':'Conectados ahora'}: ${esc(conectados.map(c=>c.name||'alguien').join(', '))}</div>`
+      : '';
+    /* La selección vive en `marcadas` (un Set), no en el DOM: este grid se
+       repinta con CADA cambio en vivo de Firestore, y si el estado estuviera
+       en las casillas se perdería sola cada vez que un compañero guarda algo
+       mientras vos elegís qué exportar. */
+    const marcada = marcadas.has(s.id);
+    return `<div class="card${marcada ? ' marcada' : ''}" data-id="${esc(s.id)}">
+      <input type="checkbox" class="card-pick" data-accion="marcar"
+             ${marcada ? 'checked' : ''} title="Seleccionar para acciones en lote"
+             aria-label="Seleccionar la sala ${esc(s.id)}">
+      ${presencia}
+      <div class="card-head">
+        <div class="card-code">${esc(s.id)}</div>
+        <div class="card-sede">${esc(h.sede) || '<span style="color:var(--muted);font-weight:400">Sin nombre de sede</span>'}</div>
+        <div class="card-lugar">${[h.municipio,h.departamento].filter(Boolean).map(esc).join(' · ') || '—'}</div>
+      </div>
+      <div class="card-meta">
+        <span><b>${n}</b> elemento${n===1?'':'s'}</span>
+        <span>editado por <b>${esc(s.byName) || 'alguien'}</b></span>
+        <span>${haceCuanto(s.updatedAt)}</span>
+      </div>
+      <div class="preview-wrap" data-preview>
+        <button class="preview-btn" data-accion="preview">
+          <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          Vista previa
+        </button>
+      </div>
+      <div class="card-actions">
+        <button class="btn" data-accion="abrir">Abrir ↗</button>
+        <button class="btn" data-accion="copiar">Copiar link</button>
+        <button class="btn" data-accion="backup">⭳ Backup</button>
+        <button class="btn" data-accion="duplicar" title="Crea una sala nueva con una copia de este plano — útil para usarlo de plantilla">Duplicar</button>
+        <button class="btn" data-accion="restaurar" title="Reemplaza el contenido de esta sala por el de un archivo de respaldo">Restaurar</button>
+        <button class="btn" data-accion="editar">Editar</button>
+        <button class="btn btn-danger" data-accion="eliminar">Eliminar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* Un solo listener delegado en el grid entero: las cards se repintan
+   seguido (cada cambio en vivo de Firestore) y no tiene sentido re-atar
+   listeners individuales cada vez. */
+$('grid').addEventListener('click', e => {
+  const btn = e.target.closest('[data-accion]');
+  if (!btn) return;
+  const card = e.target.closest('.card');
+  const codigo = card.dataset.id;
+  const sala = salas.find(s => s.id === codigo);
+  const accion = btn.dataset.accion;
+
+  if (accion === 'marcar'){
+    if (btn.checked) marcadas.add(codigo); else marcadas.delete(codigo);
+    card.classList.toggle('marcada', btn.checked);
+    pintarBarraLote();
+    return;
+  }
+  if (accion === 'duplicar') duplicarSala(sala);
+  else if (accion === 'restaurar') pedirArchivoRestaurar(sala);
+  else if (accion === 'preview') activarVistaPrevia(card.querySelector('[data-preview]'), codigo);
+  else if (accion === 'abrir') window.open(EDITOR_URL + '?p=' + encodeURIComponent(codigo), '_blank');
+  else if (accion === 'copiar') {
+    navigator.clipboard?.writeText(EDITOR_URL + '?p=' + codigo)
+      .then(() => toast('Link copiado'))
+      .catch(() => toast('No se pudo copiar — copialo a mano: ' + EDITOR_URL + '?p=' + codigo));
+  }
+  else if (accion === 'backup') descargarBackup(sala);
+  else if (accion === 'editar') abrirModalEditar(sala);
+  else if (accion === 'eliminar') abrirModalEliminar(sala);
+});
+
+$('buscar').addEventListener('input', pintarGrid);
+$('orden').addEventListener('change', pintarGrid);
+
+/* --------------------------------------------------- hero: acciones -- */
+$('btnFocoBuscar').addEventListener('click', () => {
+  $('buscar').scrollIntoView({ behavior:'smooth', block:'center' });
+  $('buscar').focus();
+});
+let vistaLista = false;
+$('btnVistaLista').addEventListener('click', () => {
+  vistaLista = !vistaLista;
+  $('grid').classList.toggle('vista-lista', vistaLista);
+  $('btnVistaLista').textContent = vistaLista ? 'Ver como cuadrícula' : 'Ver como lista';
+});
+
+/* --------------------------------------------------------- respaldos -- */
+/* Mismo formato exacto que ya usa "Guardar" en el editor (app, version,
+   savedAt, header, els, seq): el archivo que baja acá se puede volver a
+   subir con "Cargar" en el editor normal, sin conversión de por medio. */
+function datosDeBackup(sala){
+  return { app:'plano-instalacion', version:1, savedAt:new Date().toISOString(),
+           header: sala.header || {}, els: sala.els || [], seq: sala.seq || 1 };
+}
+function descargarJSON(nombre, datos){
+  const blob = new Blob([JSON.stringify(datos, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nombre; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function descargarBackup(sala){
+  const nombre = `PLANO_${sala.id}_${(sala.header?.sede || 'sede').replace(/[^\w]+/g,'_')}.json`;
+  descargarJSON(nombre, datosDeBackup(sala));
+  toast('Respaldo descargado: ' + nombre);
+}
+$('btnExportarTodo').onclick = () => {
+  if (!salas.length) return toast('No hay salas para exportar');
+  descargarJSON(`RESPALDO_TODAS_LAS_SALAS_${new Date().toISOString().slice(0,10)}.json`,
+    { app:'plano-instalacion-respaldo-completo', version:1, exportedAt:new Date().toISOString(),
+      salas: salas.map(s => ({ codigo:s.id, ...datosDeBackup(s) })) });
+  toast(`Respaldo de ${salas.length} sala${salas.length===1?'':'s'} descargado`);
+};
+
+/* --------------------------------------------------------- editar -- */
+let salaEnEdicion = null;
+function abrirModalEditar(sala){
+  salaEnEdicion = sala;
+  const h = sala.header || {};
+  $('editCodigo').textContent = sala.id;
+  $('editDepartamento').value = h.departamento || '';
+  $('editMunicipio').value    = h.municipio || '';
+  $('editSede').value         = h.sede || '';
+  $('editIdBenef').value      = h.idbenef || '';
+  $('modalEditar').classList.add('show');
+}
+$('btnCancelarEditar').onclick = () => $('modalEditar').classList.remove('show');
+$('modalEditar').addEventListener('click', e => { if (e.target.id === 'modalEditar') $('modalEditar').classList.remove('show'); });
+$('btnGuardarEditar').onclick = async () => {
+  if (!salaEnEdicion) return;
+  const btn = $('btnGuardarEditar'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    /* Rutas con punto (`header.municipio`) para actualizar solo esos
+       campos anidados — un merge normal de `{header:{...}}` REEMPLAZARÍA
+       el objeto header entero y borraría asignatario/centro poblado, que
+       ni siquiera se muestran en este formulario.
+
+       OJO — `setDoc(ref, {...}, {merge:true})` NO navega rutas con punto:
+       crea un campo de nivel superior LITERALMENTE llamado "header.sede",
+       sin tocar el "header" real (comprobado escribiendo y releyendo). El
+       formulario "guardaba" sin error pero nunca cambiaba nada — por eso
+       acá va updateDoc(), que sí interpreta la ruta con punto como un
+       campo anidado de verdad. */
+    await updateDoc(doc(db, 'planos', salaEnEdicion.id), {
+      'header.departamento': $('editDepartamento').value,
+      'header.municipio':    $('editMunicipio').value,
+      'header.sede':         $('editSede').value,
+      'header.idbenef':      $('editIdBenef').value
+    });
+    toast('Datos actualizados');
+    $('modalEditar').classList.remove('show');
+  } catch (ex){
+    toast('No se pudo guardar: ' + ex.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+  }
+};
+
+/* --------------------------------------------------------- eliminar -- */
+let salaAEliminar = null;
+function abrirModalEliminar(sala){
+  salaAEliminar = sala;
+  $('delCodigoLabel').textContent = sala.id;
+  $('delConfirmInput').value = '';
+  $('btnConfirmarEliminar').disabled = true;
+  $('modalEliminar').classList.add('show');
+  $('delConfirmInput').focus();
+  /* El respaldo se descarga SOLO al abrir esta ventana, no antes: es
+     exactamente el momento en que hace falta, y así nunca se elimina algo
+     sin que exista ya una copia en el disco del administrador — la
+     lección directa de haber perdido una sala real sin backup. */
+  descargarBackup(sala);
+}
+$('delConfirmInput').addEventListener('input', () => {
+  $('btnConfirmarEliminar').disabled = !salaAEliminar || $('delConfirmInput').value.trim() !== salaAEliminar.id;
+});
+$('btnCancelarEliminar').onclick = () => $('modalEliminar').classList.remove('show');
+$('modalEliminar').addEventListener('click', e => { if (e.target.id === 'modalEliminar') $('modalEliminar').classList.remove('show'); });
+$('btnConfirmarEliminar').onclick = async () => {
+  if (!salaAEliminar) return;
+  const btn = $('btnConfirmarEliminar'); btn.disabled = true; btn.textContent = 'Eliminando…';
+  try {
+    await deleteDoc(doc(db, 'planos', salaAEliminar.id));
+    toast('Sala ' + salaAEliminar.id + ' eliminada');
+    $('modalEliminar').classList.remove('show');
+  } catch (ex){
+    toast('No se pudo eliminar: ' + ex.message);
+    btn.disabled = false;
+  } finally {
+    btn.textContent = 'Eliminar definitivamente';
+  }
+};
+
+/* ============================================ ACCIONES EN LOTE ==========
+   Exportar o eliminar varias salas de una. El respaldo de las marcadas usa
+   el MISMO formato que "Exportar todo", así que un archivo de tres salas y
+   uno de todas se abren igual. */
+$('btnLoteLimpiar').onclick = () => {
+  marcadas.clear();
+  pintarGrid(); pintarBarraLote();
+};
+
+$('btnLoteExportar').onclick = () => {
+  const sel = salasMarcadas();
+  if (!sel.length) return toast('No hay salas seleccionadas');
+  descargarJSON(`RESPALDO_${sel.length}_SALAS_${new Date().toISOString().slice(0,10)}.json`,
+    { app:'plano-instalacion-respaldo-completo', version:1, exportedAt:new Date().toISOString(),
+      salas: sel.map(s => ({ codigo:s.id, ...datosDeBackup(s) })) });
+  toast(`Respaldo de ${sel.length} sala${sel.length===1?'':'s'} descargado`);
+};
+
+$('btnLoteEliminar').onclick = () => {
+  const sel = salasMarcadas();
+  if (!sel.length) return toast('No hay salas seleccionadas');
+  $('loteCantidad').textContent = sel.length;
+  $('loteCodigos').textContent = sel.map(s => s.id).join(', ');
+  $('loteConfirmInput').value = '';
+  $('btnConfirmarLote').disabled = true;
+  $('modalEliminarLote').classList.add('show');
+  $('loteConfirmInput').focus();
+  /* Igual que el borrado de a una: el respaldo se baja SOLO al abrir esta
+     ventana, que es justo el momento en que hace falta. Así nunca se elimina
+     un lote sin que exista ya una copia en el disco del administrador. */
+  descargarJSON(`RESPALDO_ANTES_DE_ELIMINAR_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
+    { app:'plano-instalacion-respaldo-completo', version:1, exportedAt:new Date().toISOString(),
+      salas: sel.map(s => ({ codigo:s.id, ...datosDeBackup(s) })) });
+};
+/* Se pide escribir ELIMINAR y no los códigos: con ocho salas marcadas,
+   teclear ocho códigos no agrega seguridad, agrega ganas de saltearlo. */
+$('loteConfirmInput').addEventListener('input', () => {
+  $('btnConfirmarLote').disabled = $('loteConfirmInput').value.trim().toUpperCase() !== 'ELIMINAR';
+});
+$('btnCancelarLote').onclick = () => $('modalEliminarLote').classList.remove('show');
+$('modalEliminarLote').addEventListener('click', e => {
+  if (e.target.id === 'modalEliminarLote') $('modalEliminarLote').classList.remove('show');
+});
+$('btnConfirmarLote').onclick = async () => {
+  const sel = salasMarcadas();
+  const btn = $('btnConfirmarLote'); btn.disabled = true; btn.textContent = 'Eliminando…';
+  let ok = 0, fallaron = [];
+  for (const s of sel){
+    try { await deleteDoc(doc(db, 'planos', s.id)); marcadas.delete(s.id); ok++; }
+    catch (ex){ console.error('[admin] no se pudo eliminar', s.id, ex); fallaron.push(s.id); }
+  }
+  $('modalEliminarLote').classList.remove('show');
+  btn.textContent = 'Eliminar las seleccionadas';
+  pintarBarraLote();
+  toast(fallaron.length
+    ? `${ok} eliminada(s); fallaron: ${fallaron.join(', ')}`
+    : `${ok} sala(s) eliminada(s)`);
+};
+
+/* ============================================ DUPLICAR SALA =============
+   Copia el plano entero a un código nuevo. Sirve de plantilla: una sede
+   parecida a otra se arma partiendo de la que ya está, en vez de desde cero.
+   No toca la original. */
+const ALFABETO_SALA = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';  /* sin 0/O/1/I/L, igual que el editor */
+const nuevoCodigo = () => Array.from({ length:4 },
+  () => ALFABETO_SALA[Math.floor(Math.random() * ALFABETO_SALA.length)]).join('');
+
+async function duplicarSala(sala){
+  toast('Duplicando…');
+  /* Transacción y no getDoc+setDoc: entre leer "no existe" y escribir hay una
+     ventana en la que otro puede haber creado ese mismo código, y ahí el
+     segundo pisaría al primero sin avisar. Es la misma razón por la que el
+     editor lo hace así. */
+  for (let intento = 0; intento < 5; intento++){
+    const codigo = nuevoCodigo();
+    try {
+      await runTransaction(db, async tx => {
+        const ref = doc(db, 'planos', codigo);
+        if ((await tx.get(ref)).exists()) throw new Error('codigo-ocupado');
+        tx.set(ref, {
+          by:'admin', byName:'Panel de administración', updatedAt: serverTimestamp(),
+          header: { ...(sala.header || {}) },
+          els: JSON.parse(JSON.stringify(sala.els || [])),
+          seq: sala.seq || 1
+        });
+      });
+      try { await navigator.clipboard?.writeText(EDITOR_URL + '?p=' + codigo); } catch (_){ /* el link es una comodidad, no el resultado */ }
+      toast(`Copia creada: ${codigo} — link copiado`);
+      return;
+    } catch (ex){
+      if (ex && ex.message === 'codigo-ocupado') continue;
+      console.error('[admin] no se pudo duplicar', ex);
+      return toast('No se pudo duplicar: ' + ex.message);
+    }
+  }
+  toast('No se pudo generar un código libre, probá de nuevo');
+}
+
+/* ============================================ RESTAURAR RESPALDO ========
+   Vuelca un archivo de respaldo sobre una sala existente. Acepta tanto el
+   archivo de UNA sala (el que baja "Backup" o el "Guardar" del editor) como
+   uno de varias, y en ese caso busca adentro la entrada de esta sala. */
+let salaARestaurar = null, datosARestaurar = null;
+
+function pedirArchivoRestaurar(sala){
+  salaARestaurar = sala;
+  $('restaurarFile').value = '';
+  $('restaurarFile').click();
+}
+
+/** Saca de un archivo de respaldo el plano que corresponde a `sala`. */
+function planoDelArchivo(json, sala){
+  if (json && json.app === 'plano-instalacion' && Array.isArray(json.els)) return json;
+  if (json && Array.isArray(json.salas)){
+    const propia = json.salas.find(s => String(s.codigo).toUpperCase() === sala.id);
+    if (propia) return propia;
+    if (json.salas.length === 1) return json.salas[0];
+    throw new Error(`Ese archivo tiene ${json.salas.length} salas y ninguna es ${sala.id}.`);
+  }
+  throw new Error('No parece un respaldo de este editor.');
+}
+
+$('restaurarFile').onchange = async e => {
+  const file = e.target.files[0];
+  if (!file || !salaARestaurar) return;
+  try {
+    const json = JSON.parse(await file.text());
+    datosARestaurar = planoDelArchivo(json, salaARestaurar);
+    const n = Array.isArray(datosARestaurar.els) ? datosARestaurar.els.length : 0;
+    const actuales = Array.isArray(salaARestaurar.els) ? salaARestaurar.els.length : 0;
+    $('restCodigo').textContent = salaARestaurar.id;
+    $('restArchivo').textContent = file.name;
+    $('restResumen').innerHTML =
+      `El archivo trae <b>${n}</b> elemento(s); la sala tiene ahora <b>${actuales}</b>.`;
+    $('modalRestaurar').classList.add('show');
+    /* Copia del estado ACTUAL antes de pisarlo: restaurar es reversible solo
+       si esa copia existe. */
+    descargarBackup(salaARestaurar);
+  } catch (ex){
+    toast('No se pudo leer el respaldo: ' + ex.message);
+  }
+};
+$('btnCancelarRestaurar').onclick = () => $('modalRestaurar').classList.remove('show');
+$('modalRestaurar').addEventListener('click', e => {
+  if (e.target.id === 'modalRestaurar') $('modalRestaurar').classList.remove('show');
+});
+$('btnConfirmarRestaurar').onclick = async () => {
+  if (!salaARestaurar || !datosARestaurar) return;
+  const btn = $('btnConfirmarRestaurar'); btn.disabled = true; btn.textContent = 'Restaurando…';
+  try {
+    /* `merge:false` a propósito: restaurar es reemplazar. Con merge quedarían
+       mezclados los elementos viejos con los del archivo, que es justo lo que
+       no se pidió. */
+    await setDoc(doc(db, 'planos', salaARestaurar.id), {
+      by:'admin', byName:'Panel de administración', updatedAt: serverTimestamp(),
+      header: datosARestaurar.header || {},
+      els: datosARestaurar.els || [],
+      seq: datosARestaurar.seq || 1
+    });
+    toast(`Sala ${salaARestaurar.id} restaurada`);
+    $('modalRestaurar').classList.remove('show');
+  } catch (ex){
+    toast('No se pudo restaurar: ' + ex.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Restaurar';
+  }
+};
+
+/* --------------------------------------------------- avatares (bonus) -- */
+/* Combina la presencia de TODAS las salas en una sola fila de iniciales
+   para el footer. Se repinta solo con pintarTodo() (cada snapshot en vivo
+   de Firestore) — cero llamadas nuevas a Firestore, cero escrituras. */
+function inicialesDe(nombre){
+  const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '?';
+  return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
+}
+function pintarAvatares(){
+  const cont = $('avatarRow');
+  const vistos = new Set();
+  salas.forEach(s => conectadosDe(s).forEach(c => vistos.add(c.name || 'Alguien')));
+  const nombres = [...vistos];
+  cont.innerHTML = nombres.length
+    ? nombres.map(n => `<span class="av" title="${esc(n)}">${esc(inicialesDe(n))}</span>`).join('')
+    : `<span class="av-empty">Nadie conectado en este momento</span>`;
+}
+
+/* La presencia depende del reloj, no solo de nuevos snapshots de Firestore:
+   si alguien cierra la pestaña sin que se dispare otro cambio en el
+   documento, este repintado local (sin pegarle a Firestore) es lo único
+   que hace que el punto verde se apague a los 45s como corresponde. */
+setInterval(() => { if (salas.length) pintarTodo(); }, 15000);
+</script>
+</body>
+</html>

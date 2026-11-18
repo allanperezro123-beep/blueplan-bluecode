@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Línea vertical principal -->
+  <line x1="50" y1="15" x2="50" y2="50" stroke="black" stroke-width="2.5" />
+  <!-- Barras horizontales decrecientes -->
+  <line x1="25" y1="50" x2="75" y2="50" stroke="black" stroke-width="2.5" />
+  <line x1="35" y1="62" x2="65" y2="62" stroke="black" stroke-width="2.5" />
+  <line x1="45" y1="74" x2="55" y2="74" stroke="black" stroke-width="2.5" />
+</svg>

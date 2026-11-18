@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <!-- Patrón de rayado diagonal -->
+    <pattern id="hatch-tablero" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="black" stroke-width="2" />
+    </pattern>
+  </defs>
+  <!-- Rectángulo con relleno achurado -->
+  <rect x="10" y="30" width="80" height="40" stroke="black" stroke-width="2.5" fill="url(#hatch-tablero)" />
+</svg>

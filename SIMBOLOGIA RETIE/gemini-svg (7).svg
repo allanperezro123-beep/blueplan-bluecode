@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Flecha impulsora superior -->
+  <line x1="50" y1="15" x2="50" y2="28" stroke="black" stroke-width="2" />
+  <polygon points="46,26 50,32 54,26" fill="black" />
+  <!-- Línea de contacto inclinada -->
+  <line x1="40" y1="70" x2="60" y2="35" stroke="black" stroke-width="2.5" stroke-linecap="round" />
+  <!-- Marca de disparo térmico/magnético (X en la línea) -->
+  <line x1="46" y1="56" x2="54" y2="48" stroke="black" stroke-width="2" />
+  <line x1="46" y1="48" x2="54" y2="56" stroke="black" stroke-width="2" />
+</svg>

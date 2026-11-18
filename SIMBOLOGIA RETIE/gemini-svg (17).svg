@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Línea vertical superior -->
+  <line x1="50" y1="15" x2="50" y2="50" stroke="black" stroke-width="2.5" />
+  <!-- Semicírculo/Arco del tomacorriente -->
+  <path d="M 22,50 A 28,28 0 0,0 78,50" stroke="black" stroke-width="2.5" fill="none" />
+</svg>

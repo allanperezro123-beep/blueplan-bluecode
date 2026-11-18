@@ -1,0 +1,18 @@
+{
+  "name": "plano-mcp-functions",
+  "description": "Servidor MCP remoto para el editor de planos — expone el plano como herramientas MCP sobre Firestore.",
+  "engines": { "node": "22" },
+  "main": "index.js",
+  "scripts": {
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/express": "^2.0.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "firebase-admin": "^14.2.0",
+    "firebase-functions": "^7.3.2",
+    "zod": "^4.4.3"
+  },
+  "private": true
+}

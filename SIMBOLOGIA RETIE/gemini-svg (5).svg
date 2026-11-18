@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Círculo central -->
+  <circle cx="50" cy="50" r="14" stroke="black" stroke-width="2.5" fill="none" />
+  <!-- Línea inferior izquierda -->
+  <line x1="32" y1="75" x2="43" y2="60" stroke="black" stroke-width="2.5" stroke-linecap="round" />
+  <!-- Línea superior derecha -->
+  <line x1="57" y1="40" x2="72" y2="20" stroke="black" stroke-width="2.5" stroke-linecap="round" />
+  <!-- Gancho superior -->
+  <line x1="72" y1="20" x2="85" y2="32" stroke="black" stroke-width="2.5" stroke-linecap="round" />
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Círculo principal -->
+  <circle cx="50" cy="50" r="30" stroke="black" stroke-width="2.5" fill="none" />
+  <!-- Cruz interna -->
+  <line x1="29" y1="29" x2="71" y2="71" stroke="black" stroke-width="2.5" />
+  <line x1="29" y1="71" x2="71" y2="29" stroke="black" stroke-width="2.5" />
+</svg>
